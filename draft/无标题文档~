@@ -1,0 +1,2 @@
+1、robot.cpp中，getJoints函数，为什么要定义一个容器cart？cart装着的是末端方位吗？
+2、控制电机的会不会是servoj函数？在robot_client.cc里面
