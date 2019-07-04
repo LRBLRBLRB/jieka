@@ -1,24 +1,33 @@
+//这是用于选拔赛第一轮的台球击打程序，每一个阶段只出现白球和一个红球，只需区分两个球的颜色即可判断目标球和白球，无障碍球
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <iostream>
 #include <vector>
-#include <opencv.hpp>
+
+#define length 229; //台球桌内长度，单位cm
+#define width 111;  //台球桌内宽度，单位cm
 
 using namespace std;
 using namespace cv;
 
+//定义台球桌六个球洞的像素点位置为静态全局变量
+Point hole1, hole2, hole3, hole4, hole5, hole6;
 void HoughTrans(Mat &srcImage, Mat &grayImage, Mat &houghImage, vector<Vec4f> &circles);
-void identify(Mat &ball);
-
+int identify(Mat &ball， vector<Vec4f> &circles);
+void hitingpoint (Mat &houghImage, vector<Vec4f> &circles, int &whiteBall, int &dstBall, Point dstAim);
 //函数声明！！！！！！！
 
 
 
 int main (int argc, char **argv)
 {
-    //定义原图、灰度图、最终图的Mat对象，和白球、目标球的对象
-    Mat srcImage, grayImage, houghImage, dstImage, whiteBall, dstBall;
-    
+    //给台球桌球洞赋值
+    //hole1 = ????
+
+    //定义原图、灰度图、最终图的Mat对象
+    Mat srcImage, grayImage, houghImage, dstImage;
+    Point dstAim;
+
     /// 读入源图片
     srcImage = imread("../pics/ball3.png");
     if (!srcImage.data) {
@@ -34,12 +43,14 @@ int main (int argc, char **argv)
     //Vec4f每一组的三个参数是圆心坐标x,y，半径和性质
     //0表示白球，1表示目标球，2表示障碍球
     vector<Vec4f> circles;
-    
+    //分别储存白球和目标球在容器中的位置
+    int whiteBall(-1), dstBall(-1);
+
     /// 霍夫变换，并绘图
     HoughTrans(srcImage,circles);
 
     /// 分类球
-    int row1,row2,col1,col2;
+    int row1, row2, col1, col2;
     for (size_t i = 0; i < circles.size(); ++i) {
         Point center(cvRound(circles[i][0]), cvRound(circles[i][1])); //circles的三个参数：x,y,radius
         int radius = cvRound(circles[i][2]);
@@ -52,9 +63,9 @@ int main (int argc, char **argv)
         Mat roi = houghImage(Range(row1,row2),Range(col1,col2));
         circles[i][3] = identify(roi); //标出白球和目标球
     }
-    imshow("分类", houghImage);
+    imshow("分类", houghImage, whiteBall, dstBall, i);
 
-    //
+    
 
     waitKey(0);
     return 0;
@@ -86,7 +97,7 @@ void HoughTrans(Mat &srcImage, Mat &grayImage, Mat &houghImage, vector<Vec4f> &c
 }
 
 //识别球的颜色，标出白球的质心位置
-int identify(Mat &ball， vector<Vec4f> &circles) 
+int identify(Mat &ball, vector<Vec4f> &circles, int &whiteBall, int &dstBall, int num) 
 {
     int i = 0, j = 0;
     float percent = 0;
@@ -109,23 +120,48 @@ int identify(Mat &ball， vector<Vec4f> &circles)
     
     //将找到的白球的圆心标出
     if（percent < 0.5){
-        cout << "This is a white ball." << endl;
-        ball = Scalar(0,0,200);//四个参数是蓝、绿、红、透明度
-        return 0;//返回值表明这是个白球
+        if(whiteBall == -1){
+            whiteBall = num;
+            cout << "检测到一个白球" << endl;
+            //ball = Scalar(0,0,200);//四个参数是蓝、绿、红、透明度
+            return 0;//返回值表明这是个白球
+        }
+        else {cout << "球分类错误：检测出两个白球" << endl; exit(1);}
     }
     else {
-        cout << "This is a red ball." << endl;
-        //ball = Scalar(0,0,0);
-        return 1;
+        if (dstBall == -1){
+            dstBall = num;
+            cout << "This is a red ball." << endl;
+            //ball = Scalar(0,0,0);
+            return 1;//返回值表明这是一个红球（目标球）
+        }
+        else {cout << "球分类错误：检测出两个目标球" << endl; exit(1);}
     }
 }
 
 //将白球要运动到的目标击球点在图上标出
-//初步思路——找出某直线上到该直线上某点距离为定值的点，然后将它在图像上标出
-void hitingpoint (Mat &houghImage， vector<Vec3f> &circles)
+//初步思路——半球法；找出某直线上到该直线上某点距离为定值的点，然后将它在图像上标出
+void hitingpoint (Mat &houghImage, vector<Vec4f> &circles, int &whiteBall, int &dstBall, Point dstAim)
 {
-    //
+    double distance = 2 * circles[dstBall][2]; //白球瞄准点到目标球心的距离
+    //表达出台球桌距离dstBall最近的球洞的像素点，然后由相似求出目标击球点的位置，并将其标在houghImage上
+    float x0, y0;
+    //目标球像素点：circles[dstBall][0], circles[dstBall][1];
+    dstAim.x = circles[dstBall][0] + (distance / sprtf(powf(circles[dstBall][0] - x0, 2) 
+                + powf(circles[dstBall][0] - x0, 2))) * (circles[dstBall][0] - x0);
+    dstAim.y = circles[dstBall][1] + (distance / sprtf(powf(circles[dstBall][0] - x0, 2) 
+                + powf(circles[dstBall][0] - x0, 2))) * (circles[dstBall][1] - y0);
+    
+    /*划线void line(Mat& img, Point pt1, Point pt2, const Scalar& color, int thickness=1, int lineType=8, 
+                    int shift=0)——lineType: 线段的类型。可以取值8， 4， 和CV_AA， 分别代表8邻接连接线，4邻接连接线
+                    和反锯齿连接线。默认值为8邻接。为了获得更好地效果可以选用CV_AA(采用了高斯滤波)。*/
+    Point dstWhite(circles[dstBall][0], circles[dstBall][1]);
+    line(houghImage, dstAim, dstWhite, Scalar(0, 255, 0));
 }
 
-//判断是否有击球进洞的可能
-bool isGoal (Mat &houghImage)
+//判断是否有击球进洞的可能，这个在后面的才有用到
+bool isGoal (Mat &houghImage, int &dstBall)
+{
+    //检测是否有障碍球在中间
+    //检测是否有足够的击球角度
+}
